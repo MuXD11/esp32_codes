@@ -1,11 +1,36 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme; // I2C
+
+void bme280_setup()
+{
+  if (!bme.begin(0x76))
+  {
+    Serial.println("No se detecta el BME280. Verifica conexiones y dirección I2C.");
+    while (1)
+      ;
+  }
+}
 
 // ⚙️ Configura tu red WiFi
-const char *ssid = "S2P";
-const char *password = "PASSWORD";
+const char *ssid = "Livebox6-53EF";
+const char *password = "GhSGKhn2Q9R2";
+
 int i = 1;
+
+typedef struct
+{
+  int seq;
+  float temperature;
+  float pressure;
+  float humidity;
+} data;
+
+data Datos;
 
 // URL de tu API Flask en Render
 const char *serverName = "https://iot-app-test1.onrender.com/api/datos";
@@ -30,6 +55,11 @@ void setup()
 
   //  Solo para pruebas (ignora certificados SSL)
   client.setInsecure();
+
+  // Setup periféricos:
+  // Init BME 280
+  bme280_setup();
+  ;
 }
 
 void loop()
@@ -42,8 +72,18 @@ void loop()
     {
       https.addHeader("Content-Type", "application/json");
 
-      // Datos de prueba. Puedes reemplazar los valores por mediciones reales.
-      String jsonData = "[{\"sensor\":\"temperatura\",\"valor\":" + String(i) + "}, {\"sensor\":\"presion\",\"valor\":1000}]";
+      Datos.seq = i;
+      Datos.temperature = bme.readTemperature();
+      Datos.pressure = bme.readPressure() / 100.0F;
+      Datos.humidity = bme.readHumidity();
+
+      // Crear el JSON
+      String jsonData = "[";
+      jsonData += "{\"sensor\":\"temperatura\",\"valor\":" + String(Datos.temperature, 2) + "},";
+      jsonData += "{\"sensor\":\"presion\",\"valor\":" + String(Datos.pressure, 2) + "},";
+      jsonData += "{\"sensor\":\"humedad\",\"valor\":" + String(Datos.humidity, 2) + "},";
+      jsonData += "{\"sensor\":\"seq\",\"valor\":" + String(Datos.seq) + "}";
+      jsonData += "]";
 
       int httpResponseCode = https.POST(jsonData);
 
