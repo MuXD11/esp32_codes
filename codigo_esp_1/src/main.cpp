@@ -6,6 +6,8 @@
 
 Adafruit_BME280 bme; // I2C
 
+// rama test
+
 void bme280_setup()
 {
   if (!bme.begin(0x76))
