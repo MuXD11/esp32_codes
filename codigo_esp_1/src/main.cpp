@@ -6,7 +6,7 @@
 
 Adafruit_BME280 bme; // I2C
 
-// rama test
+// rama muestreo sensores
 
 void bme280_setup()
 {
