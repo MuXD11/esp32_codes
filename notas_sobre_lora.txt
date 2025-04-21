@@ -1,0 +1,3 @@
+codigo esp_1 contiene el testeo al server constante
+
+codigo esp_1 contiene el codigo para recibir paquetes lora
