@@ -7,6 +7,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <LoRa.h>
+#include "configuration.h"
+
+// Esta sección debería ir en un archivo de configuración:
+#define SCK 5
+#define MISO 19
+#define MOSI 27
+#define NSS 18
+#define REST 23
+#define DIO0 26
+// LoRa
+#define RADIO_CS_PIN 18
+#define RADIO_RST_PIN 23
+// #define RADIO_RST_PIN 14
+#define RADIO_DIO0_PIN 26
+// #define LORA_FREQ 915E6
+#define LORA_FREQ 868E6
+
+// Declaración de varibales de estado:
+int lora_initialized;
 
 // Declaración de funciones a utilizar
 float randomInRange(int min, int max);
@@ -62,7 +81,7 @@ void setup()
   Serial.begin(115200);
   delay(1000);
 
-  // Inicializar pantalla OLED
+  // Inicializar pantalla LED
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
     screen_initialized = true;
@@ -75,9 +94,10 @@ void setup()
   }
   else
   {
-    Serial.println("⚠️ No se detectó pantalla OLED");
+    Serial.println(" No se detectó pantalla OLED");
   }
 
+  // Init WIFI
   WiFi.begin(ssid, password);
   Serial.print("Conectando a WiFi");
 
@@ -89,11 +109,24 @@ void setup()
 
   Serial.println("\n✅ Conectado a WiFi");
 
+  // Check if screen was init
   if (screen_initialized) // If screen was initialized. var = true
   {
     display.println("✅ WiFi conectado");
     display.display();
   }
+
+  // Config and init LoRa
+  LoRa.setPins(RADIO_CS_PIN, RADIO_RST_PIN, RADIO_DIO0_PIN);
+
+  do
+  {
+    lora_initialized = LoRa.begin(LORA_FREQ);
+    delay(5000);
+    Serial.println("Initialazing LoRa...");
+  } while (!lora_initialized);
+
+  Serial.println("✅ LoRa Initialized");
 
   // Solo para pruebas (ignora certificados SSL)
   client.setInsecure();
