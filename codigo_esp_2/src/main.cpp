@@ -9,50 +9,37 @@
 #include <LoRa.h>
 #include "configuration.h"
 
-// Esta sección debería ir en un archivo de configuración:
-#define SCK 5
-#define MISO 19
-#define MOSI 27
-#define NSS 18
-#define REST 23
-#define DIO0 26
-// LoRa
-#define RADIO_CS_PIN 18
-#define RADIO_RST_PIN 23
-// #define RADIO_RST_PIN 14
-#define RADIO_DIO0_PIN 26
-// #define LORA_FREQ 915E6
-#define LORA_FREQ 868E6
+// Define LORA SPI object
+SPIClass spiLora(VSPI);
 
-// Declaración de varibales de estado:
-int lora_initialized;
-
-// Declaración de funciones a utilizar
+// Private functions declaration
 float randomInRange(int min, int max);
 void screen_print(const char *text);
+byte readlorareg(byte adrss);
 
-// Configura tu red WiFi
-// const char *ssid = "Livebox6-53EF";
+// WiFi config (2)
+/*
+const char *ssid = "Livebox6-53EF";
+const char *password = "GhSGKhn2Q9R2";
+*/
 const char *ssid = "S2P";
-// const char *password = "GhSGKhn2Q9R2";
 const char *password = "PASSWORD";
 
-// Pantalla OLED (I2C)
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
+// OLED (I2C)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 bool screen_initialized = false;
 
-// display.println -> print to buffer
-// display.display() -> print to screen
-//        o
-// screen_print("text");      screen_print("⏳ Iniciando...");
+/*
+ display.println -> print to buffer
+ display.display() -> print to screen
+       o
+ screen_print("text");      screen_print("⏳ Iniciando...");
+*/
 
-// packet counter
-int i = 1;
+// sequence packet counter
+int seq_r = 1;
 
-// data structure
+// Data structure
 typedef struct
 {
   byte TX_ID;
@@ -71,17 +58,72 @@ typedef struct
 
 data Datos;
 
-// URL API Flask on Render
+// Base URL for API Flask on Render
 const char *serverName = "https://iot-app-test1.onrender.com/api/datos";
 
+// Declare WIFI client object
 WiFiClientSecure client;
+
+// LorRa chip version
+byte version;
+
+//------------------------------------------------------------------------
 
 void setup()
 {
   Serial.begin(115200);
   delay(1000);
 
-  // Inicializar pantalla LED
+  // Init and config LORA
+
+  // Config pinout. SPI pins are already config
+  pinMode(NSS, OUTPUT);
+  digitalWrite(NSS, HIGH);
+  pinMode(RST, OUTPUT);
+  pinMode(DIO0, OUTPUT);
+
+  // Begin SPI protocol
+  spiLora.begin(SCK, MISO, MOSI, NSS);
+
+  // Tell LoRa chip that we are going to communicate via SPI
+  LoRa.setSPI(spiLora);
+  LoRa.setPins(NSS, RST, DIO0);
+
+  // Manual reset of LoRa chip
+  digitalWrite(RST, LOW);
+  delay(10);
+  digitalWrite(RST, HIGH);
+  delay(10);
+
+  // Check integrity of registers
+  version = readlorareg(0x42); // 0X42 address contains the chip version
+  Serial.print("REG_VERSION: 0x");
+  Serial.print(version, HEX);
+
+  if (version != 0x12) // Incorrect response
+  {
+    Serial.print("ERROR: LoRa no responde correctamente");
+    while (1)
+    {
+    };
+  }
+
+  if (!LoRa.begin(LORA_FREQ))
+  {
+    Serial.print("ERROR: LoRa no se ha inicializado correctamente");
+    while (1)
+    {
+    };
+  }
+
+  LoRa.setSpreadingFactor(LORA_SPREAD_fACTOR);
+  LoRa.setSignalBandwidth(LORA_BANDWIDTH);
+  LoRa.setCodingRate4(LORA_CODING_RATE);
+  // LoRa.setSyncWord(LORA_SYNCWORD);    TODO: UNAVAILABLE NOW
+
+  Serial.print("LoRa configured and ready!");
+
+  // Init OLED
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
     screen_initialized = true;
@@ -108,27 +150,13 @@ void setup()
   }
 
   Serial.println("\n✅ Conectado a WiFi");
-
-  // Check if screen was init
   if (screen_initialized) // If screen was initialized. var = true
   {
     display.println("✅ WiFi conectado");
     display.display();
   }
 
-  // Config and init LoRa
-  LoRa.setPins(RADIO_CS_PIN, RADIO_RST_PIN, RADIO_DIO0_PIN);
-
-  do
-  {
-    lora_initialized = LoRa.begin(LORA_FREQ);
-    delay(5000);
-    Serial.println("Initialazing LoRa...");
-  } while (!lora_initialized);
-
-  Serial.println("✅ LoRa Initialized");
-
-  // Solo para pruebas (ignora certificados SSL)
+  // TODO: Solo para pruebas (ignora certificados SSL)
   client.setInsecure();
 
   srand(time(NULL));
@@ -139,9 +167,27 @@ void loop()
 
   int packetSize = LoRa.parsePacket();
 
-  if (packetSize)
-  // Packet received
+  if (packetSize) // Packet received. Size should equal to data struct: 4*10(float and int) + 2*1(byte) = 42B
   {
+    Serial.print("LoRa packet received. Size:");
+    Serial.print(packetSize, DEC);
+
+    if (LoRa.available()) // There is a byte in the reception buffer
+    {
+      LoRa.readBytes((byte *)&Datos, packetSize);
+
+      // Show received packets
+      for (int i = 0; i < packetSize; i++)
+      {
+        Serial.print("Seq:");
+        Serial.print(seq_r, DEC);
+        Serial.print("Byte ");
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.print(((byte *)&Datos)[i], HEX); // Cast "Datos" direction to a buffer of bytes and iterate
+        Serial.println();                       // \n
+      }
+    }
 
     if (WiFi.status() == WL_CONNECTED)
     {
@@ -150,12 +196,6 @@ void loop()
       if (https.begin(client, serverName))
       {
         https.addHeader("Content-Type", "application/json");
-
-        // Create random data
-        Datos.seq = i;
-        Datos.temperature = randomInRange((int)10, (int)60);
-        Datos.pressure = randomInRange((int)10, (int)1000);
-        Datos.humidity = randomInRange((int)0, (int)100);
 
         // Create JSON
         String jsonData = "[";
@@ -209,12 +249,28 @@ void loop()
       screen_print("🔄 Reconectando WiFi");
     }
 
-    i = i + 1;
+    seq_r++;
   }
   else
   {
-    Serial.println(".");
+    // Serial.println(".");
   }
+}
+
+/*
+OTHER PRIVATE FUNCTIONS --------------------------------------------------------------------
+*/
+
+byte readlorareg(byte adrss)
+{
+  spiLora.beginTransaction(SPISettings(1E6, MSBFIRST, SPI_MODE0)); // Begin SPI communication with LoRa chip
+  digitalWrite(NSS, LOW);                                          // Set the CS to active
+  delayMicroseconds(1);
+  spiLora.transfer(adrss & 0x7F);      //
+  byte value = spiLora.transfer(0x00); // Empty transfer
+  digitalWrite(NSS, HIGH);
+  spiLora.endTransaction(); // End SPI comm
+  return value;
 }
 
 float randomInRange(int min, int max)
