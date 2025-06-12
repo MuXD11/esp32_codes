@@ -176,6 +176,14 @@ void loop()
     {
       LoRa.readBytes((byte *)&Datos, packetSize);
 
+      // Clean the screen and notify the new packet
+      display.clearDisplay();  // Borra el contenido de la pantalla
+      display.setCursor(0, 0); // Reposiciona el cursor arriba a la izquierda
+      char msg[32];
+      snprintf(msg, sizeof(msg), "📦 Recibido #%d", Datos.seq);
+      display.println(msg); // Escribe en buffer
+      display.display();    // Refresca pantalla
+
       // Show received packets
       for (int i = 0; i < packetSize; i++)
       {
@@ -199,26 +207,24 @@ void loop()
 
         // Create JSON
         String jsonData = "[";
-        jsonData += "{\"sensor\":\"temperatura\",\"valor\":" + String(Datos.temperature, 2) + "},";
-        jsonData += "{\"sensor\":\"presion\",\"valor\":" + String(Datos.pressure, 2) + "},";
-        jsonData += "{\"sensor\":\"humedad\",\"valor\":" + String(Datos.humidity, 2) + "},";
-        jsonData += "{\"sensor\":\"seq\",\"valor\":" + String(Datos.seq) + "}";
+        jsonData += "{\"sensor\":\"TX_ID\",\"valor\":" + String(Datos.TX_ID) + "},";
+        jsonData += "{\"sensor\":\"RX_ID\",\"valor\":" + String(Datos.RX_ID) + "},";
+        jsonData += "{\"sensor\":\"seq\",\"valor\":" + String(Datos.seq) + "},";
+        jsonData += "{\"sensor\":\"latitude\",\"valor\":" + String(Datos.latitude, 6) + "},";
+        jsonData += "{\"sensor\":\"longitude\",\"valor\":" + String(Datos.longitude, 6) + "},";
+        jsonData += "{\"sensor\":\"altitude\",\"valor\":" + String(Datos.altitude, 2) + "},";
+        jsonData += "{\"sensor\":\"hdop\",\"valor\":" + String(Datos.hdop, 2) + "},";
+        jsonData += "{\"sensor\":\"temperature\",\"valor\":" + String(Datos.temperature, 2) + "},";
+        jsonData += "{\"sensor\":\"pressure\",\"valor\":" + String(Datos.pressure, 2) + "},";
+        jsonData += "{\"sensor\":\"humidity\",\"valor\":" + String(Datos.humidity, 2) + "},";
+        jsonData += "{\"sensor\":\"baro_altitude\",\"valor\":" + String(Datos.baro_altitude, 2) + "},";
+        jsonData += "{\"sensor\":\"ext_temperature\",\"valor\":" + String(Datos.ext_temperature, 2) + "}";
         jsonData += "]";
 
         int httpResponseCode = https.POST(jsonData);
 
         Serial.print("📡 Enviando POST... Código: ");
         Serial.println(httpResponseCode);
-
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "Seq: %d", Datos.seq);
-        screen_print(buffer);
-        snprintf(buffer, sizeof(buffer), "T: %.1f°C", Datos.temperature);
-        screen_print(buffer);
-        snprintf(buffer, sizeof(buffer), "P: %.1f hPa", Datos.pressure);
-        screen_print(buffer);
-        snprintf(buffer, sizeof(buffer), "H: %.1f%%", Datos.humidity);
-        screen_print(buffer);
 
         if (httpResponseCode > 0)
         {
