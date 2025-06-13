@@ -99,6 +99,7 @@ void setup()
   version = readlorareg(0x42); // 0X42 address contains the chip version
   Serial.print("REG_VERSION: 0x");
   Serial.print(version, HEX);
+  Serial.println();
 
   if (version != 0x12) // Incorrect response
   {
@@ -121,7 +122,8 @@ void setup()
   LoRa.setCodingRate4(LORA_CODING_RATE);
   // LoRa.setSyncWord(LORA_SYNCWORD);    TODO: UNAVAILABLE NOW
 
-  Serial.print("LoRa configured and ready!");
+  Serial.print("✅ LoRa configured and ready!");
+  Serial.println();
 
   // Init OLED
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -142,6 +144,7 @@ void setup()
   // Init WIFI
   WiFi.begin(ssid, password);
   Serial.print("Conectando a WiFi");
+  Serial.println();
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -169,7 +172,7 @@ void loop()
 
   if (packetSize) // Packet received. Size should equal to data struct: 4*10(float and int) + 2*1(byte) = 42B
   {
-    Serial.print("LoRa packet received. Size:");
+    Serial.print("✅ LoRa packet received correctly. Size:");
     Serial.print(packetSize, DEC);
 
     if (LoRa.available()) // There is a byte in the reception buffer
@@ -185,16 +188,20 @@ void loop()
       display.display();    // Refresca pantalla
 
       // Show received packets
+      Serial.print("Seq:");
+      Serial.print(seq_r, DEC);
+      Serial.print(", Bytes: ");
+
       for (int i = 0; i < packetSize; i++)
       {
-        Serial.print("Seq:");
-        Serial.print(seq_r, DEC);
-        Serial.print("Byte ");
-        Serial.print(i);
-        Serial.print(": ");
-        Serial.print(((byte *)&Datos)[i], HEX); // Cast "Datos" direction to a buffer of bytes and iterate
-        Serial.println();                       // \n
+        if (i > 0)
+          Serial.print(", "); // Añade coma solo a partir del segundo byte
+        byte value = ((byte *)&Datos)[i];
+        if (value < 0x10)
+          Serial.print("0"); // Asegura dos dígitos hexadecimales
+        Serial.print(value, HEX);
       }
+      Serial.println();
     }
 
     if (WiFi.status() == WL_CONNECTED)
