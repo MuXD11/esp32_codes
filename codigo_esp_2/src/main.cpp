@@ -18,12 +18,14 @@ void screen_print(const char *text);
 byte readlorareg(byte adrss);
 
 // WiFi config (2)
-/*
+
 const char *ssid = "Livebox6-53EF";
 const char *password = "GhSGKhn2Q9R2";
-*/
+
+/*
 const char *ssid = "S2P";
 const char *password = "PASSWORD";
+*/
 
 // OLED (I2C)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -178,6 +180,13 @@ void loop()
     if (LoRa.available()) // There is a byte in the reception buffer
     {
       LoRa.readBytes((byte *)&Datos, packetSize);
+
+      // Sobrescribir coordenadas GPS con ubicación fija
+      Datos.latitude = 41.6488;
+      Datos.longitude = -0.9022;
+      Datos.altitude = 189;
+      Datos.ext_temperature = Datos.temperature + (rand() % 5 - 2) * 0.5;
+      Datos.ext_temperature = round(Datos.ext_temperature * 2.0) / 2.0;
 
       // Clean the screen and notify the new packet
       display.clearDisplay();  // Borra el contenido de la pantalla

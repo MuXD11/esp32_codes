@@ -17,19 +17,19 @@
 // #define LORA_FREQ 915E6
 #define LORA_FREQ 868E6
 
+/*
 // LoRa radio config params
 #define LORA_SPREAD_fACTOR 10
 #define LORA_CODING_RATE 5
 #define LORA_BANDWIDTH 125E3 // 125KHz
 #define LORA_SYNCWORD 0x00   // UNUSED
+*/
 
-/*
 // LoRa config params 2
 #define LORA_SPREAD_fACTOR 7
 #define LORA_CODING_RATE 5
 #define LORA_BANDWIDTH 125E3 // 125KHz
 #define LORA_SYNCWORD 0x00   // UNUSED
-*/
 
 // OLED SCREEN CONFIG
 #define SCREEN_WIDTH 128

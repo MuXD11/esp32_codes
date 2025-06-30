@@ -1,3 +1,14 @@
 codigo esp_1 contiene el testeo al server constante
 
 codigo esp_1 contiene el codigo para recibir paquetes lora
+
+codigo esp_3 ESCUCHA DE PAQUETES
+
+codigo esp_4 ENVÍO DE PAQUETES LORA
+
+codigo esp_2 RECEPCIÓN Y API FLASK
+
+codigo esp_5 LOG LOCAL: escritura de seq
+
+codigo esp_6 LECTURA DEL LOG DE LA FLASH:
+ 

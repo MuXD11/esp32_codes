@@ -2,6 +2,7 @@
 // --- Librerías necesarias ---
 #include <SPI.h>
 #include <LoRa.h>
+#include <LittleFS.h> // Asegúrate de que esté habilitado
 
 // --- Definición de pines SPI y control ---
 #define SCK 5
@@ -10,22 +11,6 @@
 #define NSS 18
 #define RST 23
 #define DIO0 26
-
-// --- Instancia de SPI para LoRa ---
-SPIClass spiLoRa(VSPI); // Usa HSPI si ya estás usando VSPI para otra cosa
-
-// --- Función para leer un registro del LoRa ---
-byte readLoRaRegister(byte address)
-{
-  spiLoRa.beginTransaction(SPISettings(1E6, MSBFIRST, SPI_MODE0));
-  digitalWrite(NSS, LOW);
-  delayMicroseconds(1);
-  spiLoRa.transfer(address & 0x7F);    // Bit 7 = 0 (lectura)
-  byte value = spiLoRa.transfer(0x00); // Leer valor
-  digitalWrite(NSS, HIGH);
-  spiLoRa.endTransaction();
-  return value;
-}
 
 // --- Estructura a envíar ---
 typedef struct
@@ -57,56 +42,49 @@ void setup()
   while (!Serial)
     ;
 
-  Serial.println("Iniciando sistema...");
-  Serial.println("✅BME280 Iniciado correctamente");
-  Serial.println("✅Sonda térmica funciona correctamente");
-
   // Configurar pines
   pinMode(NSS, OUTPUT);
   digitalWrite(NSS, HIGH);
   pinMode(RST, OUTPUT);
   pinMode(DIO0, INPUT);
 
-  // Inicializar SPI
-  spiLoRa.begin(SCK, MISO, MOSI, NSS);
+  Serial.print("VERSION 1 LOGGER");
+  Serial.print("\n");
 
-  // Configurar LoRa
-  LoRa.setSPI(spiLoRa);
-  LoRa.setPins(NSS, RST, DIO0);
-
-  // Reset del módulo LoRa
-  digitalWrite(RST, LOW);
-  delay(10);
-  digitalWrite(RST, HIGH);
-  delay(10);
-
-  // Leer versión
-  byte version = readLoRaRegister(0x42);
-  Serial.print("REG_VERSION: 0x");
-  Serial.println(version, HEX);
-
-  if (version != 0x12)
+  // Init log file
+  if (!LittleFS.begin())
   {
-    Serial.println("Error: LoRa no responde.");
-    while (true)
-      ;
+    Serial.println("Error montando LittleFS. Intentando formatear...");
+    if (LittleFS.format())
+    {
+      Serial.println("Formato exitoso. Intentando montar otra vez...");
+      if (!LittleFS.begin())
+      {
+        Serial.println("Fallo definitivo montando LittleFS.");
+        return;
+      }
+    }
+    else
+    {
+      Serial.println("Fallo al formatear LittleFS.");
+      return;
+    }
+  }
+  else
+  {
+    Serial.println("LittleFS montado correctamente.");
   }
 
-  // Inicializar módulo en 868 MHz
-  if (!LoRa.begin(868E6))
-  {
-    Serial.println("Error: No se pudo inicializar LoRa.");
-    while (true)
-      ;
-  }
+  File f = LittleFS.open("/log.txt", FILE_WRITE);
+  f.print("VERSION DEL LOGGER:");
+  f.println(1);
+  f.print("Fecha: ");
+  f.println("29/06/2025");
+  f.close();
 
-  // --- Configuración de parámetros ---
-  LoRa.setSpreadingFactor(10);    // ← Ajusta aquí (SF7–SF12)
-  LoRa.setSignalBandwidth(125E3); // ← Ajusta aquí (BW: 125E3, 250E3, 500E3)
-  LoRa.setCodingRate4(5);         // 4/5, 4/6, 4/7, 4/8 opcionales
-
-  Serial.println("✅LoRa listo para transmitir.");
-  Serial.println();
+  // Información sobre el sistema de ficheros:
+  size_t total = LittleFS.totalBytes();
+  Serial.printf("Total disponible para archivos: %u bytes\n", total);
 }
 
 // --- Loop principal ---
@@ -118,24 +96,15 @@ void loop()
 
   // Generar datos aleatorios
   data_random.altitude = 271;
-
   data_random.baro_altitude = random(240, 258);
-
-  // data_random.latitude = 41.64532;
-  data_random.latitude = 0.000000;
-
-  // data_random.longitude = -0.896553;
-  data_random.longitude = -0.000000;
-
+  data_random.latitude = 0.000000;   // data_random.latitude = 41.64532;
+  data_random.longitude = -0.000000; // data_random.longitude = -0.896553;
   data_random.temperature = random(311, 325) / 10.0;
   data_random.ext_temperature_ours = random(301, 315) / 10.0;
   data_random.pressure = random(9883, 9961) / 10.0;
   data_random.humidity = random(700, 731) / 10.0;
-
   data_random.seq = i;
-
   data_random.hdop = 0;
-
   Serial.print("Transmitiendo trama. ");
   Serial.print("Size of data: ");
   Serial.println(sizeof(Data));
@@ -160,10 +129,35 @@ void loop()
   Serial.print("Humidity: ");
   Serial.println(data_random.humidity, 2);
 
-  // Envío del paquete por LoRa
-  LoRa.beginPacket();
-  LoRa.write((byte *)&data_random, sizeof(Data));
-  LoRa.endPacket();
+  // Escribir en el log
+  File f = LittleFS.open("/log.txt", FILE_APPEND);
+  if (!f || f.isDirectory())
+  {
+    Serial.println("No se pudo abrir log.txt o es un directorio (ESCRITURA).");
+    return;
+  }
+  f.println(i);
+  f.close();
+
+  // Apertura de ese log en modo lectura en múltiplos de 10, asi no se lee en cada iteración
+  if (i % 10 == 0)
+  {
+
+    Serial.println("Contenido de /log.txt:\n");
+
+    File logFile = LittleFS.open("/log.txt", FILE_READ);
+    if (!logFile || logFile.isDirectory())
+    {
+      Serial.println("No se pudo abrir log.txt o es un directorio (LECTURA).");
+      return;
+    }
+    // Leer el log a la terminal
+    while (logFile.available())
+    {
+      Serial.write(logFile.read());
+    }
+    logFile.close();
+  }
 
   delay(10000); // Espera 5 segundos entre envíos
 }
