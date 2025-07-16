@@ -1,5 +1,5 @@
 #include "gps.h"
-
+#include "data.h"
 /*
 Definición de variables
 */
@@ -118,4 +118,46 @@ void leerRespuestaNAV5(byte *p_dynstate_ext_ctrl_var)
         }
     }
     Serial.println("⚠️ Timeout leyendo respuesta NAV5");
+}
+
+void alt_proc(byte dyn_state)
+{
+
+    if (data_random.altitude < 10000 && data_random.baro_altitude < 10000)
+    {
+        if (dyn_state == 0)
+        {
+            // Modo acorde con la altitud
+        }
+        else if (dyn_state == 6)
+        {
+            // Envío de la trama para cambiar el modo
+            sendUBXmsg(setAirbornedefault, 44);
+        }
+        else
+        {
+            Serial.println("... Modo dinámico desconocido, alerta! ...");
+        }
+    }
+    else if ((data_random.altitude > 10000 && data_random.baro_altitude > 10000) && (data_random.altitude < 45000 && data_random.baro_altitude < 45000))
+    {
+        if (dyn_state == 0)
+        {
+            // Envío de la trama para cambiar el modo
+            sendUBXmsg(setAirborne1g, 44);
+        }
+        else if (dyn_state == 6)
+        {
+
+            // Modo acorde con la altitud
+        }
+        else
+        {
+            Serial.println("... Modo dinámico desconocido, alerta! ...");
+        }
+    }
+    else
+    {
+        Serial.println("... Medida de altitud no es correcta. Adquiriendo GPS ...");
+    }
 }

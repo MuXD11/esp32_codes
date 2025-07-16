@@ -2,6 +2,7 @@
 // --- Librerías necesarias ---
 #include "gps.h"
 #include "clora.h"
+#include "data.h"
 
 /*
 Mensajes GPS CFG-NAV5
@@ -19,7 +20,25 @@ byte setAirborne1g[44] = {
     0x06, 0x24, // Class, ID
     0x24, 0x00, // Length = 36 bytes
     0x01, 0x00, // mask: only dynModel and fixMode
-    0x06,       // dynModel: 5 = Airborne <1g>
+    0x06,       // dynModel: 6 = Airborne <1g>
+    0x00,       // fixMode: Auto 2D/3D
+    // Remaining 28 bytes (set to 0)
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    // Placeholder for checksum
+    0x00, 0x00};
+
+byte setAirbornedefault[44] = {
+    0xB5, 0x62, // Sync chars
+    0x06, 0x24, // Class, ID
+    0x24, 0x00, // Length = 36 bytes
+    0x01, 0x00, // mask: only dynModel and fixMode
+    0x00,       // dynModel: 0 = Portable
     0x00,       // fixMode: Auto 2D/3D
     // Remaining 28 bytes (set to 0)
     0x00, 0x00, 0x00, 0x00,
@@ -33,21 +52,6 @@ byte setAirborne1g[44] = {
     0x00, 0x00};
 
 // --- Estructura a envíar ---
-typedef struct
-{
-  byte TX_ID = 0x55;
-  byte RX_ID = 0xAA;
-  int seq;
-  float latitude;
-  float longitude;
-  float altitude;
-  float hdop;
-  float temperature;
-  float pressure;
-  float humidity;
-  float baro_altitude;
-  float ext_temperature_ours;
-} Data;
 
 Data data_random;
 
@@ -123,21 +127,25 @@ void setup()
 
   delay(10000);
 
-  // Envío de trama para hacer poll del estado
+  // Poll al GPS
   Serial.println("Enviando Poll UBX-CFG-NAV5 ...");
+
+  // Activación previa de la UART para evitar errores
   for (int i = 0; i < 10; i++)
   {
     gps_read_loop();
     delay(10);
   }
+
+  // Envío de trama para hacer poll
   sendUBXmsg(cfgNav5Poll, 8);
 
   // Recepción del mensaje de respuesta al poll de estado
   delay(200);
-  leerRespuestaNAV5(&Dumm1);
+  leerRespuestaNAV5(&dyn_state);
 
   // Envío de la trama para cambiar el modo
-  sendUBXmsg(setAirborne1g, 44);
+  // sendUBXmsg(setAirborne1g, 44);
 };
 
 /*
@@ -157,14 +165,23 @@ void loop()
   // Generar datos aleatorios
   data_random.altitude = 271;
   data_random.baro_altitude = random(240, 258);
+
+  ///////////////////////////////////////////////////////////////
+  if ((local_counter > 10) && (local_counter < 20))
+  {
+    data_random.altitude = 14400;
+    data_random.baro_altitude = 14200;
+  }
+  ///////////////////////////////////////////////////////////////
+
   data_random.latitude = _gps.location.lat();
   data_random.longitude = _gps.location.lng();
+  data_random.hdop = _gps.hdop.hdop();
   data_random.temperature = random(311, 325) / 10.0;
   data_random.ext_temperature_ours = random(301, 315) / 10.0;
   data_random.pressure = random(9883, 9961) / 10.0;
   data_random.humidity = random(700, 731) / 10.0;
   data_random.seq = local_counter;
-  data_random.hdop = 0;
 
   Serial.print("Transmitiendo trama. ");
   Serial.print("Size of data: ");
@@ -190,21 +207,19 @@ void loop()
   Serial.print("Humidity: ");
   Serial.println(data_random.humidity, 2);
 
-  // Envío del paquete por LoRa
-  LoRa.beginPacket();
-  LoRa.write((byte *)&data_random, sizeof(Data));
-  LoRa.endPacket();
-
-  // Comprobación del modo dinámico
+  // Comprobación del modo dinámico del GPS
   Serial.println("Enviando Poll UBX-CFG-NAV5 ...");
   sendUBXmsg(cfgNav5Poll, 8);
   delay(200);
   leerRespuestaNAV5(&dyn_state);
 
-  if (dyn_state != 6)
-  {
-    // rutina de emergencia! valor incorrecto
-  }
+  // Comprobación de modo de altitud
+  alt_proc(dyn_state);
+
+  // Envío del paquete por LoRa
+  LoRa.beginPacket();
+  LoRa.write((byte *)&data_random, sizeof(Data));
+  LoRa.endPacket();
 
   Serial.println("----------------------------------------------------------------");
 

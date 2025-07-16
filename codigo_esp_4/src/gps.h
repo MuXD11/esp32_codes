@@ -9,8 +9,11 @@ Includes
 /*
 Declaración de variables
 */
-extern TinyGPSPlus _gps; // (existe en otro archivo)
-extern HardwareSerial _serial_gps;
+extern TinyGPSPlus _gps;            // Definida en gps.cpp
+extern HardwareSerial _serial_gps;  // Definida en gps.cpp
+extern byte setAirborne1g[44];      // Definida en main.cpp
+extern byte cfgNav5Poll[8];         // Definida en main.cpp
+extern byte setAirbornedefault[44]; // Definida en main.cpp
 
 /*
 Declaración de funciones
@@ -59,6 +62,17 @@ void sendUBXmsg(byte *msg, uint16_t length);
  */
 
 void leerRespuestaNAV5(byte *p_dynstate_ext_ctrl_var);
+
+/**
+ * @brief Esta función procesa los datos de altitud y actúa en consecuencia
+ *
+ * Esta función lee la altitud  y envía un TC para cambiar el modo dinámico en función del estado
+ *
+ * @param dyn_state Parámetro que contiene el modo dinámico actual
+ * @return void
+ */
+
+void alt_proc(byte dyn_state);
 
 /*
 Definición de parámetros GPS
