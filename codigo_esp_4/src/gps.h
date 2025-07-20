@@ -57,7 +57,7 @@ void sendUBXmsg(byte *msg, uint16_t length);
  *
  * Se llama como respuesta a un envío de mensaje de tipo poll
  *
- * @param void
+ * @param p_dynstate_ext_ctrl_var Variable externa pasada como puntero que almacena el modo dinámico actual
  * @return void
  */
 

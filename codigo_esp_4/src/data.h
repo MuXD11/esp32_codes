@@ -23,6 +23,14 @@ typedef struct
     float ext_temperature_ours;
 } Data;
 
+typedef struct
+{
+    byte Type_of_message;
+    int TC_Action_ID;
+    float TC_Payload;
+
+} Data_TC_1;
+
 extern Data data_random; // ← declaración externa. Está definida en main.cpp
 
 #endif

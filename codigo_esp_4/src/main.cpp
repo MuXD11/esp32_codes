@@ -3,6 +3,8 @@
 #include "gps.h"
 #include "clora.h"
 #include "data.h"
+#include "tc_handling.h"
+#include "configuration.h"
 
 /*
 Mensajes GPS CFG-NAV5
@@ -52,8 +54,10 @@ byte setAirbornedefault[44] = {
     0x00, 0x00};
 
 // --- Estructura a envíar ---
-
 Data data_random;
+
+// --- Estructuras de telecomandos
+Data_TC_1 data_tc_1;
 
 // Contador local para el envío de telemetrías
 int local_counter;
@@ -61,12 +65,15 @@ int local_counter;
 // Variable de medida de estado dinámico
 byte dyn_state = 100;
 
-// Dummy for tests
-byte Dumm1;
+// Variable for TC control
+bool TC_ARRIVED;
+uint8_t TC_code;
 
 void setup()
 {
+  // Inicialziación de variables
   randomSeed(analogRead(0));
+  TC_ARRIVED = false;
 
   Serial.begin(115200);
   while (!Serial)
@@ -100,7 +107,7 @@ void setup()
   // Serial.print("REG_VERSION: 0x");
   // Serial.println(version, HEX);
 
-  if (version != 0x12)
+  if (version != LORA_CHIP_VER)
   {
     Serial.println("Error: LoRa no responde.");
     while (true)
@@ -108,7 +115,7 @@ void setup()
   }
 
   // Inicializar módulo en 868 MHz
-  if (!LoRa.begin(868E6))
+  if (!LoRa.begin(DEFAULT_LORA_FQ))
   {
     Serial.println("Error: No se pudo inicializar LoRa.");
     while (true)
@@ -116,9 +123,9 @@ void setup()
   }
 
   // --- Configuración de parámetros ---
-  LoRa.setSpreadingFactor(10);
-  LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(5); // 4/5, 4/6, 4/7, 4/8
+  LoRa.setSpreadingFactor(DEFAULT_LORA_SF);
+  LoRa.setSignalBandwidth(DEFAULT_LORA_BW);
+  LoRa.setCodingRate4(DEFAULT_LORA_CR);
 
   Serial.println("✅ LoRa listo para transmitir.");
 
@@ -153,9 +160,34 @@ void setup()
 */
 void loop()
 {
-
-  // Incrementar contador
+  // Incrementar contador de telemetría
   local_counter++;
+
+  // Toma de medida de tiempo
+  unsigned long t_inicio_loop = millis();
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  /* fragmento de prueba: Inyección de TC por código identificador */
+  /*
+  if (local_counter == 5)
+  {
+    TC_ARRIVED = true;
+    TC_code = 1;
+  }
+  else if (local_counter == 6)
+  {
+    TC_ARRIVED = false;
+    TC_code = 0;
+  }
+  */
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // Comprobar los telecomandos recibidos
+  if (TC_ARRIVED == true)
+  {
+    dispatch_telecommand(TC_code);
+    TC_ARRIVED = false;
+  }
 
   // Bucle para leer datos GPS
   gps_read_loop();
@@ -166,13 +198,14 @@ void loop()
   data_random.altitude = 271;
   data_random.baro_altitude = random(240, 258);
 
-  ///////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  /* fragmento de prueba: Valor de altitud elevado para comprobar el cambio automático de modo dinámico del GPS*/
   if ((local_counter > 10) && (local_counter < 20))
   {
     data_random.altitude = 14400;
     data_random.baro_altitude = 14200;
   }
-  ///////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   data_random.latitude = _gps.location.lat();
   data_random.longitude = _gps.location.lng();
@@ -221,7 +254,44 @@ void loop()
   LoRa.write((byte *)&data_random, sizeof(Data));
   LoRa.endPacket();
 
-  Serial.println("----------------------------------------------------------------");
+  // Toma de medida de tiempo
+  unsigned long t_end_loop = millis();
+  unsigned long t_duration_loop = (t_end_loop - t_inicio_loop);
 
-  delay(10000);
+  if (t_duration_loop > DEFAULT_LOOP_PERIOD_MS)
+  {
+    Serial.println("ERROR: LOOP TOOK MORE THAN 10 SECONDS");
+  }
+
+  unsigned long t_remaining = DEFAULT_LOOP_PERIOD_MS - t_duration_loop; // Cantidad de tiempo restante del periodo
+
+  Serial.println("ENTRANDO EN ESCUCHA ACTIVA");
+  while ((millis() - t_end_loop) < t_remaining) // while there is period time remaining
+  {
+
+    // Escucha en LoRa
+    int packetsize = LoRa.parsePacket();
+    if (packetsize) // Packet received. Size should equal to data TODO: Define TC/TM system
+    {
+      Serial.println("Paquete recibido");
+      Serial.print(packetsize, DEC);
+
+      // Flag de recepción
+      TC_ARRIVED = true;
+
+      if (LoRa.available())
+      {
+        LoRa.readBytes((byte *)&data_tc_1, packetsize);
+        TC_code = data_tc_1.TC_Action_ID; // Set local variable to hold TC action info
+        Serial.println("Acción a realizar");
+        Serial.print(TC_code, DEC);
+      }
+    }
+
+    Serial.println("-");
+    delay(1000);
+  }
+  Serial.println("SALIENDO DE ESCUCHA ACTIVA");
+
+  Serial.println("----------------------------------------------------------------");
 }

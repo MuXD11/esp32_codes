@@ -76,7 +76,7 @@ void leerRespuestaNAV5(byte *p_dynstate_ext_ctrl_var)
     bool header_found = false;
 
     while (millis() - start < 3000)
-    { // timeout 1 segundo
+    { // timeout de 3 segundos para la recepción
         if (_serial_gps.available())
         {
             byte c = _serial_gps.read();
