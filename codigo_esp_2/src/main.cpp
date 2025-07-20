@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <LoRa.h>
+#include <LittleFS.h>
 #include "configuration.h"
 
 // Define LORA SPI object
@@ -16,6 +17,7 @@ SPIClass spiLora(VSPI);
 float randomInRange(int min, int max);
 void screen_print(const char *text);
 byte readlorareg(byte adrss);
+void obtenerComandoDesdeServidor();
 
 // WiFi config (2)
 
@@ -41,6 +43,9 @@ bool screen_initialized = false;
 // sequence packet counter
 int seq_r = 1;
 
+// corrupt paquet count
+int packet_corrupt = 0;
+
 // Data structure
 typedef struct
 {
@@ -59,6 +64,16 @@ typedef struct
 } data;
 
 data Datos;
+
+typedef struct
+{
+  byte Type_of_message;
+  int TC_Action_ID;
+  float TC_Payload;
+
+} Data_TC_1;
+
+Data_TC_1 Datos_TC_1;
 
 // Base URL for API Flask on Render
 const char *serverName = "https://iot-app-test1.onrender.com/api/datos";
@@ -161,6 +176,41 @@ void setup()
     display.display();
   }
 
+  // Init log file and LittleFS
+  if (!LittleFS.begin())
+  {
+    Serial.println("Error montando LittleFS. Intentando formatear...");
+    if (LittleFS.format())
+    {
+      Serial.println("Formato exitoso. Intentando montar otra vez...");
+      if (!LittleFS.begin())
+      {
+        Serial.println("Fallo definitivo montando LittleFS.");
+        return;
+      }
+    }
+    else
+    {
+      Serial.println("Fallo al formatear LittleFS.");
+      return;
+    }
+  }
+  else
+  {
+    Serial.println("LittleFS montado correctamente.");
+  }
+
+  File f = LittleFS.open("/log.txt", FILE_WRITE);
+  f.print("LOGGER DEL RECEPTOR V:");
+  f.println(2);
+  f.print("Fecha: ");
+  f.println("30/06/2025");
+  f.close();
+
+  // Información sobre el sistema de ficheros:
+  size_t total = LittleFS.totalBytes();
+  Serial.printf("Total disponible para archivos: %u bytes\n", total);
+
   // TODO: Solo para pruebas (ignora certificados SSL)
   client.setInsecure();
 
@@ -198,7 +248,7 @@ void loop()
 
       // Show received packets
       Serial.print("Seq:");
-      Serial.print(seq_r, DEC);
+      Serial.print(Datos.seq, DEC);
       Serial.print(", Bytes: ");
 
       for (int i = 0; i < packetSize; i++)
@@ -211,6 +261,46 @@ void loop()
         Serial.print(value, HEX);
       }
       Serial.println();
+
+      // Escribir en el LOG (memoria Flash):
+      if (Datos.seq > 0 && Datos.seq < 1000000) // Validar que el número de secuencia sea razonable
+      {
+        File f = LittleFS.open("/log.txt", FILE_APPEND);
+        if (!f || f.isDirectory())
+        {
+          Serial.println("No se pudo abrir log.txt o es un directorio (ESCRITURA).");
+        }
+        else
+        {
+          f.println(Datos.seq);
+          f.close();
+          Serial.println("📝 Secuencia válida escrita en log.");
+        }
+      }
+      else
+      {
+        packet_corrupt++;
+        Serial.printf("⚠️ Valor de secuencia anómalo (%d), no se guarda.\n", Datos.seq);
+      }
+
+      // Apertura de ese log en modo lectura en múltiplos de 5, asi no se lee en cada iteración
+      if (Datos.seq % 5 == 0)
+      {
+
+        Serial.println("Contenido de /log.txt:\n");
+
+        File logFile = LittleFS.open("/log.txt", FILE_READ);
+        if (!logFile || logFile.isDirectory())
+        {
+          Serial.println("No se pudo abrir log.txt o es un directorio (LECTURA).");
+        }
+        // Leer el log a la terminal
+        while (logFile.available())
+        {
+          Serial.write(logFile.read());
+        }
+        logFile.close();
+      }
     }
 
     if (WiFi.status() == WL_CONNECTED)
@@ -270,12 +360,12 @@ void loop()
       WiFi.reconnect();
       screen_print("🔄 Reconectando WiFi");
     }
-
-    seq_r++;
   }
   else
   {
-    // Serial.println(".");
+    obtenerComandoDesdeServidor();
+    //  delay(1000);
+    //  Serial.println("No hay datos de telemetría recibidos");
   }
 }
 
@@ -300,7 +390,7 @@ float randomInRange(int min, int max)
   return min + rand() % (max - min + 1);
 }
 
-// 📺 Imprimir texto en pantalla OLED
+// Imprimir texto en pantalla OLED
 void screen_print(const char *text)
 {
   if (!screen_initialized)
@@ -316,5 +406,76 @@ void screen_print(const char *text)
     line = 0;
     delay(2000);
     display.clearDisplay();
+  }
+}
+
+// Obtener comandos envíados al servidor
+void obtenerComandoDesdeServidor()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("❌ WiFi no conectado. No se puede obtener comando.");
+    return;
+  }
+
+  HTTPClient https;
+  const char *comando_url = "https://iot-app-test1.onrender.com/api/comando";
+
+  if (https.begin(client, comando_url)) // Prior HTTP connection ended! Important
+  {
+    int httpCode = https.GET();
+
+    if (httpCode > 0)
+    {
+      String respuesta = https.getString();
+      Serial.println("📥 Comando recibido del servidor:");
+      Serial.println(respuesta);
+
+      // Verifica si hay comando real (no null)
+      if (respuesta.indexOf("null") == -1)
+      {
+        // ArduinoJson para parsear:
+        String comando = respuesta.substring(respuesta.indexOf(":\"") + 2, respuesta.indexOf("\","));
+        String valor = respuesta.substring(respuesta.lastIndexOf(":") + 1, respuesta.indexOf("}"));
+
+        Serial.print("➡️ Comando: ");
+        Serial.println(comando);
+        Serial.print("➡️ Valor: ");
+        Serial.println(valor);
+
+        // Paso a variables para el envío LoRa
+        Datos_TC_1.TC_Action_ID = 1;
+        Datos_TC_1.Type_of_message = valor.toInt();
+        Datos_TC_1.TC_Payload = 0.0;
+
+        // Envío por LoRa a segmento vuelo
+        LoRa.beginPacket();
+        LoRa.write((byte *)&Datos_TC_1, sizeof(Data_TC_1));
+        LoRa.endPacket();
+
+        Serial.println("📤 Comando enviado por LoRa.");
+
+        // Muestra por pantalla
+        /*
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "TC: %s = %s", comando.c_str(), valor.c_str());
+        screen_print(buffer);
+        */
+      }
+      else
+      {
+        // Serial.println("ℹ️ No hay comandos pendientes.");
+      }
+    }
+    else
+    {
+      Serial.printf("❌ Error en GET: %s\n", https.errorToString(httpCode).c_str());
+    }
+
+    https.end();
+  }
+  else
+  {
+    Serial.println("❌ No se pudo conectar al servidor de comandos.");
   }
 }
