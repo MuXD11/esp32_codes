@@ -7,31 +7,37 @@ Includes
 #include <string.h>
 #include "clora.h"
 #include "gps.h"
+#include "data.h"
+
+extern int loop_period_ms;
 
 /*
 Implementaciones de funciones
 */
 
 // Función principal de TCs
-void dispatch_telecommand(uint8_t code)
+void dispatch_telecommand(void)
 {
-    switch (code)
+    switch (data_tc_1.TC_Action_ID)
     {
     case 1:
         handle_reset_system();
+        break;
+    case 2:
+        handle_loop_freq();
         break;
 
     case 10:
         handle_reconfigure_lora(DEFAULT_SF, DEFAULT_BW, DEFAULT_CR);
         break;
 
-    case 20:
-        handle_change_dynamic_model(DEFAULT_DYN_MODEL);
+    case 11:
+        handle_change_trans_power();
         break;
 
     default:
         Serial.print("⚠️ Código de TC no reconocido: ");
-        Serial.println(code);
+        Serial.println(data_tc_1.TC_Action_ID);
         break;
     }
 }
@@ -42,6 +48,12 @@ void handle_reset_system(void)
     Serial.println(" TC 2.1 recibido: Reiniciando sistema...");
     delay(1000);
     ESP.restart();
+}
+
+// Telecomando 2: Cambio de periodo del loop principal
+void handle_loop_freq(void)
+{
+    loop_period_ms = data_tc_1.TC_Payload;
 }
 
 // Telecomando 10: Reconfiguración de parámetros LoRa
@@ -61,18 +73,11 @@ void handle_reconfigure_lora(int sf, long bw, int cr)
 }
 
 // Telecomando 20: Cambio de modelo dinámico GPS
-void handle_change_dynamic_model(uint8_t model)
+void handle_change_trans_power()
 {
-    Serial.println(" TC 2.3 recibido: Cambiando modo dinámico GPS...");
+    Serial.println(" ....... ");
 
     /*
-    byte msg[44];
-    memcpy(msg, setAirbornedefault, 44); // copiar base
-    msg[6] = 0x01;                       // mask: dynModel
-    msg[7] = model;                      // modelo dinámico
-
-    // Calcular checksum
-    calcChecksum(&msg[2], 40, &msg[42], &msg[43]);
-    sendUBXmsg(msg, 44);
-*/
+    Cambio de potencia
+    */
 }

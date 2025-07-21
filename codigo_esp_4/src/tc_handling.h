@@ -15,15 +15,21 @@ Declaración de funciones
  * @brief Despacha un telecomando en función de su código.
  *
  * Ejecuta la función correspondiente al código de telecomando recibido.
+ * (ej. 1-9 = sistema, 10-19 = LoRa reconfig, 20-29 = GPS, 30-39 = EPS)
  *
- * @param code Código de telecomando (ej. 1-9 = sistema, 10-19 = LoRa reconfig, 20-29 = GPS, 30-39 = EPS)
+ * @param
  */
-void dispatch_telecommand(uint8_t code);
+void dispatch_telecommand(void);
 
 /**
  * @brief Telecomando 1: Reinicio del sistema
  */
 void handle_reset_system(void);
+
+/**
+ * @brief Telecomando 2: Cambio de periodo de bucle
+ */
+void handle_loop_freq(void);
 
 /**
  * @brief Telecomando 10: Reconfigura los parámetros LoRa
@@ -35,11 +41,11 @@ void handle_reset_system(void);
 void handle_reconfigure_lora(int sf, long bw, int cr);
 
 /**
- * @brief Telecomando 11: Cambia el modo dinámico del GPS
+ * @brief Telecomando 11: Cambia la potencia de transmisión
  *
- * @param model Número de modelo dinámico UBX (ej. 6 = Airborne <1g>)
+ * @param
  */
-void handle_change_dynamic_model(uint8_t model);
+void handle_change_trans_power();
 
 /*
 Parámetros por defecto

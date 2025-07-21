@@ -11,15 +11,14 @@ Parámetros globales configurables
 */
 
 // --- Temporización ---
-#define DEFAULT_LOOP_PERIOD_MS 10000 // Periodo del loop principal en ms
-#define MIN_LOOP_PERIOD_MS 1000      // Límite inferior para transmisión rápida
-#define MAX_LOOP_PERIOD_MS 60000     // Límite superior
+int default_local_period = 10000; // Periodo del loop principal en ms
 
 // --- Configuración de LoRa por defecto ---
 #define DEFAULT_LORA_FQ 868E6
 #define DEFAULT_LORA_SF 10
 #define DEFAULT_LORA_BW 125E3
 #define DEFAULT_LORA_CR 5 // 4/5, 4/6, 4/7, 4/8
+#define DEFAULT_LORA_POWER 17
 #define LORA_CHIP_VER 0x12
 
 // --- Control de sensores ---
@@ -32,11 +31,5 @@ Parámetros globales configurables
 
 // --- Modo dinámico GPS por defecto ---
 #define DEFAULT_DYN_MODEL 6 // Airborne <1g>
-
-/*
-Variables configurables en ejecución
-(Si se desea que puedan cambiar con TC)
-*/
-extern uint32_t loop_period_ms; // Modificable por telecomando
 
 #endif

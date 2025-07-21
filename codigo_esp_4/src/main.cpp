@@ -67,7 +67,8 @@ byte dyn_state = 100;
 
 // Variable for TC control
 bool TC_ARRIVED;
-uint8_t TC_code;
+
+int loop_period_ms = default_local_period;
 
 void setup()
 {
@@ -126,6 +127,7 @@ void setup()
   LoRa.setSpreadingFactor(DEFAULT_LORA_SF);
   LoRa.setSignalBandwidth(DEFAULT_LORA_BW);
   LoRa.setCodingRate4(DEFAULT_LORA_CR);
+  LoRa.setTxPower(DEFAULT_LORA_POWER);
 
   Serial.println("✅ LoRa listo para transmitir.");
 
@@ -185,7 +187,7 @@ void loop()
   // Comprobar los telecomandos recibidos
   if (TC_ARRIVED == true)
   {
-    dispatch_telecommand(TC_code);
+    dispatch_telecommand();
     TC_ARRIVED = false;
   }
 
@@ -258,12 +260,12 @@ void loop()
   unsigned long t_end_loop = millis();
   unsigned long t_duration_loop = (t_end_loop - t_inicio_loop);
 
-  if (t_duration_loop > DEFAULT_LOOP_PERIOD_MS)
+  if (t_duration_loop > loop_period_ms)
   {
     Serial.println("ERROR: LOOP TOOK MORE THAN 10 SECONDS");
   }
 
-  unsigned long t_remaining = DEFAULT_LOOP_PERIOD_MS - t_duration_loop; // Cantidad de tiempo restante del periodo
+  unsigned long t_remaining = loop_period_ms - t_duration_loop; // Cantidad de tiempo restante del periodo
 
   Serial.println("ENTRANDO EN ESCUCHA ACTIVA");
   while ((millis() - t_end_loop) < t_remaining) // while there is period time remaining
@@ -281,10 +283,8 @@ void loop()
 
       if (LoRa.available())
       {
-        LoRa.readBytes((byte *)&data_tc_1, packetsize);
-        TC_code = data_tc_1.TC_Action_ID; // Set local variable to hold TC action info
-        Serial.println("Acción a realizar");
-        Serial.print(TC_code, DEC);
+        LoRa.readBytes((byte *)&data_tc_1, packetsize); // Al copiarlo a esa estructura, no hace falta pasar params, ya que todos los archivos tienen acceso a esa estructura        Serial.println("Acción a realizar");
+        Serial.print(data_tc_1.TC_Action_ID, DEC);
       }
     }
 
