@@ -1,0 +1,10 @@
+curl -X POST https://iot-app-test1.onrender.com/api/comando -H "Content-Type: application/json" -d "{\"comando\": \"SET_MODO\", \"valor\": 1}"
+
+
+
+
+nuevo curl:
+
+curl -X POST "https://iot-app-test1.onrender.com/api/comando" \
+  -H "Content-Type: application/json" \
+  -d '{"Type_of_message":1,"TC_Action_ID":2,"TC_Payload":1234}'
